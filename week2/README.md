@@ -14,6 +14,6 @@ LV1
 
 ## 專案 env 參數
 - VITE_API_BASE=https://ec-course-api.hexschool.io/v2
-- VITE_API_PATH=claudiali1221
+- VITE_API_PATH=claudia1121
 
 > 依作業規範，不提供登入帳密，僅提供環境變數名稱。
