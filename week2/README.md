@@ -13,14 +13,7 @@ LV1
 > 本次作業程式碼位於 `/week2` 目錄
 
 ## 專案 env 參數
-- VITE_API_BASE
-- VITE_API_PATH
+- VITE_API_BASE=https://ec-course-api.hexschool.io/v2
+- VITE_API_PATH=claudiali1221
 
 > 依作業規範，不提供登入帳密，僅提供環境變數名稱。
-
-## 專案操作方式
-```bash
-npm install
-npm run dev
-npm run build
-npm run deploy
