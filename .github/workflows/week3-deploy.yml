@@ -2,7 +2,7 @@ name: Deploy Week3 to GitHub Pages
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - "week3/**"
       - ".github/workflows/week3-deploy.yml"
@@ -38,13 +38,17 @@ jobs:
         working-directory: week3
         run: npm run build
 
-      # ✅ 讓 /week3/ 這個路徑可以正常進入（不要 404）
+      # ✅ 部署到 Pages「根目錄」(https://.../ClaudiaLi/)
       - name: Prepare publish folder
         run: |
-        rm -rf publish
-        mkdir -p publish
-        cp -r week3/dist/* publish/
+          rm -rf publish
+          mkdir -p publish
+          cp -r week3/dist/* publish/
 
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish
 
   deploy:
     environment:
@@ -56,3 +60,4 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
