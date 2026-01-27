@@ -205,7 +205,7 @@ function App() {
     }));
   }, []);
 
-  
+
 
 
 
@@ -304,30 +304,30 @@ function App() {
 
 
   // 用途：向後端取得產品列表並更新 products
-const getProducts = useCallback(async () => {
-  const mySeq = reqSeqRef.current;
+  const getProducts = useCallback(async () => {
+    const mySeq = reqSeqRef.current;
 
-  try {
-    // 先把 API 所有頁撈完
-    let page = 1;
-    let allApiProducts = [];
-    let totalPages = 1;
+    try {
+      // 先把 API 所有頁撈完
+      let page = 1;
+      let allApiProducts = [];
+      let totalPages = 1;
 
-    do {
-      const res = await axios.get(
-        `${API_BASE}/api/${API_PATH}/admin/products?page=${page}`
-      );
-      if (mySeq !== reqSeqRef.current) return;
+      do {
+        const res = await axios.get(
+          `${API_BASE}/api/${API_PATH}/admin/products?page=${page}`
+        );
+        if (mySeq !== reqSeqRef.current) return;
 
-      const apiProducts = Array.isArray(res.data.products)
-        ? res.data.products
-        : Object.values(res.data.products || {});
+        const apiProducts = Array.isArray(res.data.products)
+          ? res.data.products
+          : Object.values(res.data.products || {});
 
-      allApiProducts = allApiProducts.concat(apiProducts);
+        allApiProducts = allApiProducts.concat(apiProducts);
 
-      totalPages = res.data.pagination?.total_pages || 1;
-      page += 1;
-    } while (page <= totalPages);
+        totalPages = res.data.pagination?.total_pages || 1;
+        page += 1;
+      } while (page <= totalPages);
 
       const merged = [...defaultProducts, ...allApiProducts];
 
@@ -400,13 +400,17 @@ const getProducts = useCallback(async () => {
     };
   }, []);
 
-  // 用途：頁面載入時如果 cookie 有 token 就自動驗證登入
+  // 用途：頁面載入時如果 cookie 有 token 且 hasLogin 才自動驗證登入
   useEffect(() => {
     const token = getTokenFromCookie();
 
+    // ✅ gate：必須曾經「在本分頁登入過」才做自動驗證
+    const hasLogin = sessionStorage.getItem("hasLogin");
+
     resetApp({ keepEmail: true, clearPassword: false, clearToken: false });
 
-    if (!token) return;
+    // ✅ 沒 token 或沒 hasLogin → 不做驗證，直接留在登入頁
+    if (!token || !hasLogin) return;
 
     const init = async () => {
       const mySeq = reqSeqRef.current;
@@ -418,14 +422,16 @@ const getProducts = useCallback(async () => {
         const ok = await checkAdmin();
         if (!ok && mySeq === reqSeqRef.current) {
           resetApp({ keepEmail: true, clearPassword: false, clearToken: true });
+          sessionStorage.removeItem("hasLogin");
         }
       } finally {
-        setIsChecking(false);
+        if (mySeq === reqSeqRef.current) setIsChecking(false);
       }
     };
 
     init();
   }, [checkAdmin, resetApp]);
+
 
   // 用途：關閉 modal
   const closeModal = useCallback(() => {
@@ -588,61 +594,64 @@ const getProducts = useCallback(async () => {
   );
 
   // 用途：登入送出
-const onSubmit = useCallback(
-  async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
+  const onSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
 
-    setIsSubmitting(true);
+      setIsSubmitting(true);
 
-    const mySeq = reqSeqRef.current;
+      const mySeq = reqSeqRef.current;
 
-    try {
-      const res = await axios.post(`${API_BASE}/admin/signin`, formData);
-      if (mySeq !== reqSeqRef.current) return;
+      try {
+        const res = await axios.post(`${API_BASE}/admin/signin`, formData);
+        if (mySeq !== reqSeqRef.current) return;
 
-      const { token, expired } = res.data;
+        const { token, expired } = res.data;
 
-      document.cookie = `hexToken=${token}; expires=${new Date(
-        expired
-      ).toUTCString()}; path=/`;
+        document.cookie = `hexToken=${token}; expires=${new Date(
+          expired
+        ).toUTCString()}; path=/`;
 
-      axios.defaults.headers.common["Authorization"] = token;
+        axios.defaults.headers.common["Authorization"] = token;
 
-      setPageErrorMsg("");
-      await checkAdmin();
-    } catch (err) {
-      if (mySeq !== reqSeqRef.current) return;
+        setPageErrorMsg("");
+        await checkAdmin();
+        sessionStorage.setItem("hasLogin", "true");
 
-      const status = err?.response?.status;
-      const msg = err?.response?.data?.message;
+      } catch (err) {
+        if (mySeq !== reqSeqRef.current) return;
 
-      console.log("signin error:", status, err?.response?.data);
+        const status = err?.response?.status;
+        const msg = err?.response?.data?.message;
 
-      setIsAuth(false);
+        console.log("signin error:", status, err?.response?.data);
 
-      // ✅ 真的 401 才叫做帳密錯
-      if (status === 401) {
-        showPageError("登入失敗：帳號或密碼錯誤");
-      } else {
-        showPageError(
-          `登入失敗：${status || "no status"} ${
-            Array.isArray(msg) ? msg.join("、") : msg || ""
-          }`
-        );
+        setIsAuth(false);
+
+        // ✅ 真的 401 才叫做帳密錯
+        if (status === 401) {
+          showPageError("登入失敗：帳號或密碼錯誤");
+        } else {
+          showPageError(
+            `登入失敗：${status || "no status"} ${Array.isArray(msg) ? msg.join("、") : msg || ""
+            }`
+          );
+        }
+      } finally {
+        if (mySeq === reqSeqRef.current) setIsSubmitting(false);
       }
-    } finally {
-      if (mySeq === reqSeqRef.current) setIsSubmitting(false);
-    }
-  },
-  [formData, checkAdmin, isSubmitting, showPageError]
-);
+    },
+    [formData, checkAdmin, isSubmitting, showPageError]
+  );
 
 
   // 用途：登出
   const logout = useCallback(() => {
+    sessionStorage.removeItem("hasLogin");
     resetApp({ keepEmail: true, clearPassword: true, clearToken: true });
   }, [resetApp]);
+
 
   // 用途：自動驗證登入時的過渡畫面
   if (isChecking) {
