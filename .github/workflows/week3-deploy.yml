@@ -19,6 +19,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # ✅ 你在 App.jsx 用的是 import.meta.env.VITE_API_BASE / VITE_API_PATH
+      # ✅ 這裡請放「你的 HexSchool API 網域」與「你的 API_PATH」
+      VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+      VITE_API_PATH: ${{ vars.VITE_API_PATH }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,4 +66,3 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-
