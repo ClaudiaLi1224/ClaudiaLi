@@ -4,8 +4,13 @@ import axios from "axios";
 import * as bootstrap from "bootstrap";
 import "./assets/style.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-const API_PATH = import.meta.env.VITE_API_PATH;
+// ✅ GitHub Pages 常見拿不到 env，所以要給保底值
+const API_BASE =
+  import.meta.env.VITE_API_BASE || "https://ec-course-api.hexschool.io/v2";
+
+// ✅ API Path 如果也會 undefined，就給一個保底（換成自己的）
+const API_PATH = import.meta.env.VITE_API_PATH || "claudia1121";
+
 
 // 用途：modal 表單的「空白預設值」，新增產品時會先用這份把欄位清空cdcd
 const INITIAL_TEMPLATE_DATA = {
@@ -583,39 +588,56 @@ const getProducts = useCallback(async () => {
   );
 
   // 用途：登入送出
-  const onSubmit = useCallback(
-    async (e) => {
-      e.preventDefault();
-      if (isSubmitting) return;
+const onSubmit = useCallback(
+  async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
 
-      setIsSubmitting(true);
+    setIsSubmitting(true);
 
-      const mySeq = reqSeqRef.current;
+    const mySeq = reqSeqRef.current;
 
-      try {
-        const res = await axios.post(`${API_BASE}/admin/signin`, formData);
-        if (mySeq !== reqSeqRef.current) return;
+    try {
+      const res = await axios.post(`${API_BASE}/admin/signin`, formData);
+      if (mySeq !== reqSeqRef.current) return;
 
-        const { token, expired } = res.data;
+      const { token, expired } = res.data;
 
-        document.cookie = `hexToken=${token}; expires=${new Date(
-          expired
-        ).toUTCString()}; path=/`;
+      document.cookie = `hexToken=${token}; expires=${new Date(
+        expired
+      ).toUTCString()}; path=/`;
 
-        axios.defaults.headers.common["Authorization"] = token;
+      axios.defaults.headers.common["Authorization"] = token;
 
-        setPageErrorMsg("");
-        await checkAdmin();
-      } catch {
-        if (mySeq !== reqSeqRef.current) return;
-        setIsAuth(false);
-        showPageError("登入失敗，請確認帳號或密碼");
-      } finally {
-        if (mySeq === reqSeqRef.current) setIsSubmitting(false);
+      setPageErrorMsg("");
+      await checkAdmin();
+    } catch (err) {
+      if (mySeq !== reqSeqRef.current) return;
+
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message;
+
+      console.log("signin error:", status, err?.response?.data);
+
+      setIsAuth(false);
+
+      // ✅ 真的 401 才叫做帳密錯
+      if (status === 401) {
+        showPageError("登入失敗：帳號或密碼錯誤");
+      } else {
+        showPageError(
+          `登入失敗：${status || "no status"} ${
+            Array.isArray(msg) ? msg.join("、") : msg || ""
+          }`
+        );
       }
-    },
-    [formData, checkAdmin, isSubmitting, showPageError]
-  );
+    } finally {
+      if (mySeq === reqSeqRef.current) setIsSubmitting(false);
+    }
+  },
+  [formData, checkAdmin, isSubmitting, showPageError]
+);
+
 
   // 用途：登出
   const logout = useCallback(() => {
