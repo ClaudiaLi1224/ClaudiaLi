@@ -420,7 +420,7 @@ const getProducts = useCallback(async () => {
           resetApp({ keepEmail: true, clearPassword: false, clearToken: true });
         }
       } finally {
-        if (mySeq === reqSeqRef.current) setIsChecking(false);
+        setIsChecking(false);
       }
     };
 
