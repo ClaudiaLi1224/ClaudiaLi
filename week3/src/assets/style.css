@@ -31,3 +31,18 @@ img {
 .images {
   height: 150px;
 }
+
+/* 登入卡片：不要滿版，固定在一個舒服寬度 */
+.container.login{
+  width: 100%;
+  max-width: 300px; 
+  margin: 0 auto;
+}
+
+/* 讓 input 那一列吃滿卡片寬度 */
+.container.login .form-floating{
+  width: 100%;
+}
+.container.login .form-control{
+  width: 100%;
+}
