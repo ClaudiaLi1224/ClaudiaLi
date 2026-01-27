@@ -41,13 +41,10 @@ jobs:
       # ✅ 讓 /week3/ 這個路徑可以正常進入（不要 404）
       - name: Prepare publish folder
         run: |
-          mkdir -p publish/week3
-          cp -r week3/dist/* publish/week3/
+        rm -rf publish
+        mkdir -p publish
+        cp -r week3/dist/* publish/
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: publish
 
   deploy:
     environment:
