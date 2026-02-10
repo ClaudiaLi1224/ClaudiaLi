@@ -1,364 +1,674 @@
-import { useEffect, useRef, useState } from "react";
+import ProductModal from "./components/ProductModal";
+import LoginView from "./views/LoginView";
+import AdminView from "./views/AdminView";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-
 import * as bootstrap from "bootstrap";
-import ProductModal from "./component/ProductModal";
-import Pagination from "./component/Pagination";
-
 import "./assets/style.css";
 
-const API_BASE = "https://ec-course-api.hexschool.io/v2";
-const API_PATH = "";
+const API_BASE =
+  import.meta.env.VITE_API_BASE || "https://ec-course-api.hexschool.io/v2";
+const API_PATH = import.meta.env.VITE_API_PATH || "claudia1121";
+
+const INITIAL_TEMPLATE_DATA = {
+  id: "",
+  title: "",
+  category: "",
+  origin_price: 0,
+  price: 0,
+  unit: "",
+  description: "",
+  content: "",
+  is_enabled: 0,
+  num: 0,
+  imageUrl: "",
+  imagesUrl: [],
+  rating: 0,
+  _ts: 0,
+};
+
+const getTokenFromCookie = () =>
+  document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("hexToken="))
+    ?.split("=")[1];
 
 function App() {
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ username: "", password: "" });
 
   const [isAuth, setIsAuth] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [isSaving, setIsSaving] = useState(false);
+
   const [products, setProducts] = useState([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+  const [templateProduct, setTemplateProduct] = useState(INITIAL_TEMPLATE_DATA);
+  const [modalType, setModalType] = useState("");
+
   const [pagination, setPagination] = useState({});
 
+  const [pageErrorMsg, setPageErrorMsg] = useState("");
+  const [modalErrorMsg, setModalErrorMsg] = useState("");
+
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [subImageUrl, setSubImageUrl] = useState("");
+
+  const [highlightId, setHighlightId] = useState("");
+
   const productModalRef = useRef(null);
-  const [modalType, setModalType] = useState("");
-  const [templateData, setTemplateData] = useState({
-    id: "",
-    imageUrl: "",
-    title: "",
-    category: "",
-    unit: "",
-    origin_price: 0,
-    price: 0,
-    description: "",
-    content: "",
-    is_enabled: false,
-    imagesUrl: [],
-  });
+  const lastActiveElRef = useRef(null);
+  const reqSeqRef = useRef(0);
 
-  const openModal = (product, type) => {
-    setTemplateData({
-      id: product.id || "",
-      imageUrl: product.imageUrl || "",
-      title: product.title || "",
-      category: product.category || "",
-      unit: product.unit || "",
-      origin_price: product.origin_price || 0,
-      price: product.price || 0,
-      description: product.description || "",
-      content: product.content || "",
-      is_enabled: product.is_enabled || false,
-      imagesUrl: product.imagesUrl || [],
-    });
-    productModalRef.current.show();
-    setModalType(type);
-  };
+  const pageTimerRef = useRef(null);
+  const modalTimerRef = useRef(null);
 
-  const handleFileChange = async (e) => {
-    const url = `${API_BASE}/api/${API_PATH}/admin/upload`;
+  const highlightTimerRef = useRef(null);
 
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const showPageError = useCallback((msg) => {
+    setPageErrorMsg(msg);
+    if (pageTimerRef.current) clearTimeout(pageTimerRef.current);
+    pageTimerRef.current = setTimeout(() => {
+      setPageErrorMsg("");
+      pageTimerRef.current = null;
+    }, 3000);
+  }, []);
 
-    try {
-      const formData = new FormData();
-      formData.append("file-to-upload", file);
+  const showModalError = useCallback((msg) => {
+    setModalErrorMsg(msg);
+    if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+    modalTimerRef.current = setTimeout(() => {
+      setModalErrorMsg("");
+      modalTimerRef.current = null;
+    }, 3000);
+  }, []);
 
-      let res = await axios.post(url, formData);
-      const uploadedImageUrl = res.data.imageUrl;
-
-      setTemplateData((prevTemplateData) => ({
-        ...prevTemplateData,
-        imageUrl: uploadedImageUrl,
-      }));
-    } catch (error) {
-      console.error("Upload error:", error);
-    }
-  };
-
-  const closeModal = () => {
-    productModalRef.current.hide();
-  };
-
-  const updateProductData = async (id) => {
-    let product;
-    if (modalType === "edit") {
-      product = `product/${id}`;
-    } else {
-      product = `product`;
-    }
-
-    const url = `${API_BASE}/api/${API_PATH}/admin/${product}`;
-    const productData = {
-      data: {
-        ...templateData,
-        origin_price: Number(templateData.origin_price),
-        price: Number(templateData.price),
-        is_enabled: templateData.is_enabled ? 1 : 0,
-        imageUrl: templateData.imageUrl,
-      },
-    };
-
-    try {
-      let response;
-      if (modalType === "edit") {
-        response = await axios.put(url, productData);
-        console.log("更新成功", response.data);
-      } else {
-        response = await axios.post(url, productData);
-        console.log("新增成功", response.data);
-      }
-
-      productModalRef.current.hide();
-      getProductData();
-    } catch (err) {
-      if (modalType === "edit") {
-        console.error("更新失敗", err.response.data.message);
-      } else {
-        console.error("新增失敗", err.response.data.message);
-      }
-    }
-  };
-
-  const delProductData = async (id) => {
-    try {
-      const response = await axios.delete(
-        `${API_BASE}/api/${API_PATH}/admin/product/${id}`
-      );
-      console.log("刪除成功", response.data);
-      productModalRef.current.hide();
-      getProductData();
-    } catch (err) {
-      console.error("刪除失敗", err.response.data.message);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { id, value, type, checked } = e.target;
-
-    if (id === "username" || id === "password") {
-      setFormData((prevData) => ({
-        ...prevData,
-        [id]: value,
-      }));
-    } else {
-      setTemplateData((prevData) => ({
-        ...prevData,
-        [id]: type === "checkbox" ? checked : value,
-      }));
-    }
-  };
-
-  const handleImageChange = (index, value) => {
-    setTemplateData((prevData) => {
-      const newImages = [...prevData.imagesUrl];
-      newImages[index] = value;
-
-      if (
-        value !== "" &&
-        index === newImages.length - 1 &&
-        newImages.length < 5
-      ) {
-        newImages.push("");
-      }
-
-      if (newImages.length > 1 && newImages[newImages.length - 1] === "") {
-        newImages.pop();
-      }
-
-      return { ...prevData, imagesUrl: newImages };
-    });
-  };
-
-  const handleAddImage = () => {
-    setTemplateData((prevData) => ({
-      ...prevData,
-      imagesUrl: [...prevData.imagesUrl, ""],
-    }));
-  };
-
-  const handleRemoveImage = () => {
-    setTemplateData((prevData) => {
-      const newImages = [...prevData.imagesUrl];
-      newImages.pop();
-      return { ...prevData, imagesUrl: newImages };
-    });
-  };
-
-  const getProductData = async (page = 1) => {
-    try {
-      const response = await axios.get(
-        `${API_BASE}/api/${API_PATH}/admin/products?page=${page}`
-      );
-      setProducts(response.data.products);
-      setPagination(response.data.pagination);
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API_BASE}/admin/signin`, formData);
-      const { token, expired } = response.data;
-      document.cookie = `hexToken=${token};expires=${new Date(expired)}`;
-      axios.defaults.headers.common.Authorization = `${token}`;
-
-      getProductData()
-      setIsAuth(true);
-    } catch (err) {
-      alert(`登入失敗：${err.response.data.message}`);
-    }
-  };
+  const flashHighlight = useCallback((id, ms = 2500) => {
+    setHighlightId(id);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightId("");
+      highlightTimerRef.current = null;
+    }, ms);
+  }, []);
 
   useEffect(() => {
-    const token = document.cookie.replace(
-      /(?:(?:^|.*;\s*)hexToken\s*=\s*([^;]*).*$)|^.*$/,
-      "$1"
-    );
-    axios.defaults.headers.common.Authorization = token;
-    productModalRef.current = new bootstrap.Modal("#productModal", {
-      keyboard: false,
+    return () => {
+      if (pageTimerRef.current) clearTimeout(pageTimerRef.current);
+      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
+
+  const getModal = useCallback(() => {
+    const modalEl = productModalRef.current;
+    if (!modalEl) return null;
+    return bootstrap.Modal.getOrCreateInstance(modalEl, { keyboard: false });
+  }, []);
+
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData((pre) => ({ ...pre, [name]: value }));
+  }, []);
+
+  const handleTemplateChange = useCallback((e) => {
+    const { name, value, type, checked } = e.target;
+
+    setFieldErrors((prev) => {
+      if (!prev?.[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
     });
 
-    document
-      .querySelector("#productModal")
-      .addEventListener("hide.bs.modal", () => {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-      });
-
-      const checkAdmin = async () => {
-        try {
-          await axios.post(`${API_BASE}/api/user/check`);
-          getProductData();
-          setIsAuth(true);
-        } catch (err) {
-          console.log(err.response.data.message);
-        }
-      };
-    checkAdmin();
+    setTemplateProduct((prev) => ({
+      ...prev,
+      [name]:
+        type === "checkbox"
+          ? checked
+            ? 1
+            : 0
+          : type === "number"
+            ? value === ""
+              ? 0
+              : Number(value)
+            : value,
+    }));
   }, []);
+
+  const uploadFileToServer = useCallback(async (file) => {
+    const fd = new FormData();
+    fd.append("file-to-upload", file);
+    const res = await axios.post(`${API_BASE}/api/${API_PATH}/admin/upload`, fd);
+    return res.data.imageUrl;
+  }, []);
+
+  const uploadImage = useCallback(
+    async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const url = await uploadFileToServer(file);
+        setTemplateProduct((prev) => ({ ...prev, imageUrl: url }));
+      } catch (error) {
+        console.log(error?.response || error);
+        showModalError("主圖上傳失敗，請稍後再試");
+      } finally {
+        e.target.value = "";
+      }
+    },
+    [uploadFileToServer, showModalError]
+  );
+
+  const uploadSubImages = useCallback(
+    async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      try {
+        const urls = [];
+        for (const file of files) {
+          const url = await uploadFileToServer(file);
+          urls.push(url);
+        }
+
+        setTemplateProduct((prev) => ({
+          ...prev,
+          imagesUrl: [...(prev.imagesUrl || []), ...urls],
+        }));
+      } catch (error) {
+        console.log(error?.response || error);
+        showModalError("副圖上傳失敗，請稍後再試");
+      } finally {
+        e.target.value = "";
+      }
+    },
+    [uploadFileToServer, showModalError]
+  );
+
+  const addSubImage = useCallback(() => {
+    const url = subImageUrl.trim();
+    if (!url) return;
+
+    setTemplateProduct((prev) => ({
+      ...prev,
+      imagesUrl: [...(prev.imagesUrl || []), url],
+    }));
+    setSubImageUrl("");
+  }, [subImageUrl]);
+
+  const removeLastSubImage = useCallback(() => {
+    setTemplateProduct((prev) => ({
+      ...prev,
+      imagesUrl: (prev.imagesUrl || []).slice(0, -1),
+    }));
+  }, []);
+
+  const removeSubImageAt = useCallback((idx) => {
+    setTemplateProduct((prev) => ({
+      ...prev,
+      imagesUrl: (prev.imagesUrl || []).filter((_, i) => i !== idx),
+    }));
+  }, []);
+
+  const resetApp = useCallback(
+    (options = { keepEmail: true, clearPassword: true, clearToken: false }) => {
+      reqSeqRef.current += 1;
+
+      delete axios.defaults.headers.common["Authorization"];
+
+      if (options.clearToken) {
+        document.cookie =
+          "hexToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+      }
+
+      setIsAuth(false);
+      setProducts([]);
+      setPagination({});
+      setIsLoadingProducts(false);
+
+      setTemplateProduct(INITIAL_TEMPLATE_DATA);
+      setModalType("");
+
+      setPageErrorMsg("");
+      setModalErrorMsg("");
+      setFieldErrors({});
+      setSubImageUrl("");
+
+      setHighlightId("");
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        username: options.keepEmail ? prev.username : "",
+        password: options.clearPassword ? "" : prev.password,
+      }));
+
+      try {
+        if (document.body.classList.contains("modal-open")) {
+          getModal()?.hide();
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [getModal]
+  );
+
+  const forceLogoutWithMsg = useCallback(
+    (msg = "登入已失效，請重新登入") => {
+      resetApp({ keepEmail: true, clearPassword: true, clearToken: true });
+      showPageError(msg);
+    },
+    [resetApp, showPageError]
+  );
+
+  const handleAuthError = useCallback(
+    (err, msg) => {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        forceLogoutWithMsg(msg);
+        return true;
+      }
+      return false;
+    },
+    [forceLogoutWithMsg]
+  );
+
+  const getProducts = useCallback(
+    async (page = 1) => {
+      const mySeq = reqSeqRef.current;
+      setIsLoadingProducts(true);
+
+      try {
+        const res = await axios.get(
+          `${API_BASE}/api/${API_PATH}/admin/products?page=${page}`
+        );
+        if (mySeq !== reqSeqRef.current) return;
+
+        const apiProducts = Array.isArray(res.data.products)
+          ? res.data.products
+          : Object.values(res.data.products || {});
+
+        setProducts(apiProducts);
+        setPagination(res.data.pagination || {});
+        setPageErrorMsg("");
+      } catch (err) {
+        if (mySeq !== reqSeqRef.current) return;
+        if (handleAuthError(err, "登入已失效（401/403），請重新登入")) return;
+        showPageError("取得產品失敗，請稍後再試");
+      } finally {
+        if (mySeq === reqSeqRef.current) setIsLoadingProducts(false);
+      }
+    },
+    [showPageError, handleAuthError]
+  );
+
+  const checkAdmin = useCallback(async () => {
+    const mySeq = reqSeqRef.current;
+
+    try {
+      await axios.post(`${API_BASE}/api/user/check`);
+      if (mySeq !== reqSeqRef.current) return false;
+
+      setIsAuth(true);
+      await getProducts(1);
+      return true;
+    } catch (err) {
+      if (mySeq !== reqSeqRef.current) return false;
+      if (handleAuthError(err, "登入已失效（401/403），請重新登入")) return false;
+      setIsAuth(false);
+      return false;
+    }
+  }, [getProducts, handleAuthError]);
+
+  useEffect(() => {
+    const modalEl = productModalRef.current;
+    if (!modalEl) return;
+
+    const handleHide = () => {
+      const active = document.activeElement;
+      if (active && modalEl.contains(active)) active.blur?.();
+      document.body.setAttribute("tabindex", "-1");
+      document.body.focus();
+    };
+
+    const handleHidden = () => {
+      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+      setModalErrorMsg("");
+      setFieldErrors({});
+      lastActiveElRef.current?.focus?.();
+    };
+
+    modalEl.addEventListener("hide.bs.modal", handleHide);
+    modalEl.addEventListener("hidden.bs.modal", handleHidden);
+
+    return () => {
+      modalEl.removeEventListener("hide.bs.modal", handleHide);
+      modalEl.removeEventListener("hidden.bs.modal", handleHidden);
+    };
+  }, []);
+
+  useEffect(() => {
+    const token = getTokenFromCookie();
+    const hasLogin = sessionStorage.getItem("hasLogin");
+
+    resetApp({ keepEmail: true, clearPassword: false, clearToken: false });
+
+    if (!token || !hasLogin) return;
+
+    const init = async () => {
+      const mySeq = reqSeqRef.current;
+      setIsChecking(true);
+
+      try {
+        axios.defaults.headers.common["Authorization"] = token;
+
+        const ok = await checkAdmin();
+        if (!ok && mySeq === reqSeqRef.current) {
+          resetApp({ keepEmail: true, clearPassword: false, clearToken: true });
+          sessionStorage.removeItem("hasLogin");
+        }
+      } finally {
+        if (mySeq === reqSeqRef.current) setIsChecking(false);
+      }
+    };
+
+    init();
+  }, [checkAdmin, resetApp]);
+
+  const closeModal = useCallback(() => {
+    if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+    setModalErrorMsg("");
+    setFieldErrors({});
+
+    const modalEl = productModalRef.current;
+    const active = document.activeElement;
+    if (modalEl && active && modalEl.contains(active)) {
+      active.blur?.();
+    }
+    getModal()?.hide();
+  }, [getModal]);
+
+  const openModal = useCallback(
+    (type, product) => {
+      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+      setModalErrorMsg("");
+      setFieldErrors({});
+
+      lastActiveElRef.current = document.activeElement;
+
+      setModalType(type);
+      setSubImageUrl("");
+
+      if (type === "create") {
+        setTemplateProduct({ ...INITIAL_TEMPLATE_DATA, _ts: Date.now() });
+      } else {
+        setTemplateProduct({ ...INITIAL_TEMPLATE_DATA, ...product });
+      }
+
+      setTimeout(() => {
+        getModal()?.show();
+      }, 0);
+    },
+    [getModal]
+  );
+
+  const handleConfirm = useCallback(async () => {
+    if (isSaving) return;
+
+    const required = [
+      { key: "title", label: "標題" },
+      { key: "category", label: "分類" },
+      { key: "unit", label: "單位" },
+    ];
+
+    const errors = {};
+    required.forEach(({ key, label }) => {
+      if (!String(templateProduct[key] ?? "").trim()) {
+        errors[key] = `${label}為必填`;
+      }
+    });
+
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      showModalError("無法存檔：請檢查標記為紅框的必填欄位");
+      return;
+    }
+
+    setIsSaving(true);
+    if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+    setModalErrorMsg("");
+
+    try {
+      const now = Date.now();
+
+      const safeRating = Math.min(
+        5,
+        Math.max(0, Number(templateProduct.rating || 0))
+      );
+
+      const payload = {
+        data: {
+          ...templateProduct,
+          rating: safeRating,
+          _ts: now,
+        },
+      };
+
+      if (modalType === "create") {
+        await axios.post(`${API_BASE}/api/${API_PATH}/admin/product`, payload);
+        await getProducts(1);
+      } else if (modalType === "edit") {
+        await axios.put(
+          `${API_BASE}/api/${API_PATH}/admin/product/${templateProduct.id}`,
+          payload
+        );
+
+        const currentPage = Number(pagination?.current_page) || 1;
+        await getProducts(currentPage);
+        flashHighlight(templateProduct.id);
+      } else {
+        showModalError("modalType 不正確，請重新操作。");
+        return;
+      }
+
+      closeModal();
+    } catch (err) {
+      if (handleAuthError(err, "登入已失效（401/403），請重新登入")) return;
+
+      const serverMsg = err?.response?.data?.message;
+      const msg = Array.isArray(serverMsg)
+        ? serverMsg.join("、")
+        : serverMsg || "儲存失敗，請稍後再試";
+
+      showModalError(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    isSaving,
+    templateProduct,
+    modalType,
+    getProducts,
+    closeModal,
+    showModalError,
+    handleAuthError,
+    pagination,
+    flashHighlight,
+  ]);
+
+  const handleDelete = useCallback(
+    async (product, displayNo) => {
+      if (isSaving) return;
+
+      const title = product?.title || "(未命名)";
+      const category = product?.category || "-";
+      const price = product?.price ?? "-";
+      const id = product?.id || "";
+
+      const ok = window.confirm(
+        `確定要刪除這筆商品嗎？\n\n` +
+        `序號：${displayNo}\n` +
+        `名稱：${title}\n` +
+        `分類：${category}\n` +
+        `售價：${price}\n` +
+        `ID：${id}`
+      );
+      if (!ok) return;
+
+      setIsSaving(true);
+      setPageErrorMsg("");
+
+      try {
+        await axios.delete(`${API_BASE}/api/${API_PATH}/admin/product/${id}`);
+
+        const currentPage = Number(pagination?.current_page) || 1;
+        await getProducts(currentPage);
+      } catch (err) {
+        if (handleAuthError(err, "登入已失效（401/403），請重新登入")) return;
+
+        const serverMsg = err?.response?.data?.message;
+        const msg = Array.isArray(serverMsg)
+          ? serverMsg.join("、")
+          : serverMsg || "刪除失敗，請稍後再試";
+        showPageError(msg);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [isSaving, pagination, getProducts, showPageError, handleAuthError]
+  );
+
+  const onSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
+
+      setIsSubmitting(true);
+      const mySeq = reqSeqRef.current;
+
+      try {
+        const res = await axios.post(`${API_BASE}/admin/signin`, formData);
+        if (mySeq !== reqSeqRef.current) return;
+
+        const { token, expired } = res.data;
+
+        document.cookie = `hexToken=${token}; expires=${new Date(
+          expired
+        ).toUTCString()}; path=/`;
+
+        axios.defaults.headers.common["Authorization"] = token;
+
+        setPageErrorMsg("");
+        await checkAdmin();
+        sessionStorage.setItem("hasLogin", "true");
+      } catch (err) {
+        if (mySeq !== reqSeqRef.current) return;
+
+        const status = err?.response?.status;
+        const data = err?.response?.data;
+        const serverMsg = data?.message;
+        const errorCode = data?.error?.code;
+
+        setIsAuth(false);
+
+        if (
+          status === 400 &&
+          typeof errorCode === "string" &&
+          errorCode.startsWith("auth/")
+        ) {
+          showPageError("登入失敗：帳號或密碼錯誤");
+          return;
+        }
+
+        if (status === 401) {
+          showPageError("登入失敗：帳號或密碼錯誤");
+          return;
+        }
+
+        if (status === 400) {
+          const msg = Array.isArray(serverMsg) ? serverMsg.join("、") : serverMsg;
+          showPageError(`登入失敗（400）：${msg || "請確認輸入格式"}`);
+          return;
+        }
+
+        const msg = Array.isArray(serverMsg) ? serverMsg.join("、") : serverMsg;
+        showPageError(`登入失敗：${status || "no status"} ${msg || ""}`);
+      } finally {
+        if (mySeq === reqSeqRef.current) setIsSubmitting(false);
+      }
+    },
+    [formData, checkAdmin, isSubmitting, showPageError]
+  );
+
+  const logout = useCallback(() => {
+    sessionStorage.removeItem("hasLogin");
+    resetApp({ keepEmail: false, clearPassword: true, clearToken: true });
+  }, [resetApp]);
+
+  if (isChecking) {
+    return (
+      <div className="container login">
+        <h1>驗證登入中...</h1>
+      </div>
+    );
+  }
+
+  const currentPage = Number(pagination?.current_page) || 1;
+  const perPage = Number(pagination?.per_page) || 10;
+  const startIndex = (currentPage - 1) * perPage;
 
   return (
     <>
-      {isAuth ? (
-        <div>
-          <div className="container">
-            <div className="d-flex justify-content-between mt-4">
-              <button
-                className="btn btn-primary"
-                onClick={() => openModal("", "new")}
-              >
-                建立新的產品
-              </button>
-            </div>
-            <table className="table mt-4">
-              <thead>
-                <tr>
-                  <th width="120">分類</th>
-                  <th>產品名稱</th>
-                  <th width="120">原價</th>
-                  <th width="120">售價</th>
-                  <th width="100">是否啟用</th>
-                  <th width="120">編輯</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.category}</td>
-                    <td>{product.title}</td>
-                    <td className="text-end">{product.origin_price}</td>
-                    <td className="text-end">{product.price}</td>
-                    <td>
-                      {product.is_enabled ? (
-                        <span className="text-success">啟用</span>
-                      ) : (
-                        <span>未啟用</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="btn-group">
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary btn-sm"
-                          onClick={() => openModal(product, "edit")}
-                        >
-                          編輯
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger btn-sm"
-                          onClick={() => openModal(product, "delete")}
-                        >
-                          刪除
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <Pagination pagination={pagination} changePage={getProductData} />
-          </div>
-        </div>
+      {!isAuth ? (
+        <LoginView
+          formData={formData}
+          onChange={handleInputChange}
+          onSubmit={onSubmit}
+          isSubmitting={isSubmitting}
+          pageErrorMsg={pageErrorMsg}
+        />
       ) : (
-        <div className="container login mt-5">
-          <div className="row justify-content-center">
-            <h1 className="h3 mb-3 font-weight-normal">請先登入</h1>
-            <div className="col-8">
-              <form id="form" className="form-signin" onSubmit={handleSubmit}>
-                <div className="form-floating mb-3">
-                  <input
-                    type="email"
-                    className="form-control"
-                    id="username"
-                    placeholder="name@example.com"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    required
-                    autoFocus
-                  />
-                  <label htmlFor="username">Email address</label>
-                </div>
-                <div className="form-floating">
-                  <input
-                    type="password"
-                    className="form-control"
-                    id="password"
-                    placeholder="Password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <label htmlFor="password">Password</label>
-                </div>
-                <button
-                  className="btn btn-lg btn-primary w-100 mt-3"
-                  type="submit"
-                >
-                  登入
-                </button>
-              </form>
-            </div>
-          </div>
-          <p className="mt-5 mb-3 text-muted">&copy; 2025~∞ - 六角學院</p>
-        </div>
+        <AdminView
+          pageErrorMsg={pageErrorMsg}
+          products={products}
+          isLoadingProducts={isLoadingProducts}
+          isSaving={isSaving}
+          pagination={pagination}
+          startIndex={startIndex}
+          highlightId={highlightId} 
+          onLogout={logout}
+          onCreate={() => openModal("create", INITIAL_TEMPLATE_DATA)}
+          onEdit={(p) => openModal("edit", p)}
+          onDelete={handleDelete}
+          onChangePage={getProducts}
+        />
       )}
+
       <ProductModal
+        productModalRef={productModalRef}
         modalType={modalType}
-        templateData={templateData}
-        onCloseModal={closeModal}
-        onInputChange={handleInputChange}
-        onFileChange={handleFileChange}
-        onImageChange={handleImageChange}
-        onAddImage={handleAddImage}
-        onRemoveImage={handleRemoveImage}
-        onUpdateProduct={updateProductData}
-        onDeleteProduct={delProductData}
+        templateProduct={templateProduct}
+        subImageUrl={subImageUrl}
+        setSubImageUrl={setSubImageUrl}
+        fieldErrors={fieldErrors}
+        modalErrorMsg={modalErrorMsg}
+        isSaving={isSaving}
+        onChange={handleTemplateChange}
+        onAddSubImage={addSubImage}
+        onRemoveLastSubImage={removeLastSubImage}
+        onRemoveSubImageAt={removeSubImageAt}
+        onClose={closeModal}
+        onConfirm={handleConfirm}
+        uploadImage={uploadImage}
+        uploadSubImages={uploadSubImages}
       />
     </>
   );
