@@ -1,8 +1,9 @@
-# React + Vite
+Week 4 作業 作業等級 LV3
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+作業連結 GitHub Repo： https://github.com/ClaudiaLi1224/ClaudiaLi
 
-Currently, two official plugins are available:
+GitHub Pages： https://claudiali1224.github.io/ClaudiaLi/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+本次作業程式碼位於 /week4 目錄
+
+專案 env 參數 VITE_API_BASE=https://ec-course-api.hexschool.io/v2 VITE_API_PATH=claudia1121 依作業規範，不提供登入帳密，僅提供環境變數名稱。
